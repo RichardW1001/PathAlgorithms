@@ -1,0 +1,36 @@
+Notes
+-----
+
+Some scribblings to explain the thought processes and project evolution.
+
+- On reading the brief, there are natural components to split this into:
+	
+	- A component that loads the dictionary
+	- A component that processes the output
+	- A component that does the work
+	
+As I'm going to be TDD'ing this, this is an essential first thing to split out because having a dependency on the file system or on the console is bad news. I want to be able to isolate the algorithm so that I get rapid feedback from unit tests.
+
+- I can now write a first test, which of course won't compile because nothing exists; in a bigger system I'd use mocks for the dependencies, but writing fakes is fine for this. A FakeDictionaryProvider and FakeOutputProvider can be created, allowing much easier testing.
+
+- Before writing the tests I put in a bit of simple framework to allow Given/When/Then style testing. This is boilerplate that I use quite often.
+
+- The first test is the "spin" -> "spot" test. After writing the test, I can now add a component to do the actual search at last! At this stage, I'm writing the simplest solution that gives me a green light; it's not necessarily correct for later tests, not necessarily well structured, and not necessarily performant because all those things can come later. It looks like although the problem domain is conceptually similar to a graph traversal with a shortest path search, a simpler Linq based solution will work.
+
+I can make a couple of refactorings at this stage, like making the check for valid links and difference calculations be helper functions. In this solution, these are purely helper functions, and so they do not have their own dedicated unit tests; they are covered by the tests on the public API.
+
+- The second test is the "AAAA" -> "AAZZ" test. It is not possible for the simple Linq algorithm to get a green light on this test, and so at this stage it needs to be changed. It is still possible to solve at this stage using a Linq solution, albeit more complicated, and using recursion. The Linq algorithm actually does a complete scan of the dictionary, because the shortcut used in test 1 no longer works. This probably won't be performant enough against a big dictionary, but I'll address that later.
+
+- I added a third test to cover a dictionary with no route between the start and end words. This one needed minimal tweaks to get a green light, as it's relatively simple, but it's still a useful thing to specify this behaviour before introducing a less simple dictionary.
+
+- At this stage there is a viable solution, so I can implement the IDictionaryProvider and IOutputProvider against the file system. A 4th test is added, covering loading the larger dictionary from the file system, as an integration test. This will show whether the algorithm is performant enough, which of course it isn't; the complete recursive scan works, but incredibly slowly.
+
+- To get this algorithm faster, it looks like a good idea to treat it as a graph traversal. A way of doing this efficiently is to use a breadth first search, which works through all nodes at a given depth before moving to the next depth, i.e. it walks from the starting point, looking at each of the possible next levels, then looks at all the 2nd level, then all of the 3rd level, until a solution is found at which point it stops. This can be done by using a queue and recursion, adding the next things to look at to the queue, and only looking at them while it could be possible to find a better solution.
+
+- The resulting algorithm works, is fast, but is ugly! It is now time to start refactoring, in the knowledge that I have instant feedback from my unit tests if I horribly break anything.
+
+As a first iteration of refactoring, I can split out the parts of the method into helpers; validation for example gets its own method, to leave a clearer picture.
+
+It now looks like the search is adding a lot of clutter to this method, and is actually a generic algorithm. I create a copy at this stage, because this refactor isn't simple and I'm not using version control - I'd normally commit at every significant junction, to a private branch, so that I can roll back easily. The generic algorithm has what may seem an unusual looking signature with the Func<> arguments, but these are there to allow complete separation from the specific implementation.
+
+- This looks reasonable now; I have green unit and integration tests, the solution looks tidy, and the algorithm seems fast (searching the dictionary provided for a route from cat -> dog considers 800+ words and completes in about 80ms on my laptop, including reading the file). I guess I'd better write a console app! The console app is simplistic; it has very naive error handling, and isn't going to win any UX awards, but it gives a runnable demo.
